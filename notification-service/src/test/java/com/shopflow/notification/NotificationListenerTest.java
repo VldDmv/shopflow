@@ -5,10 +5,14 @@ import com.shopflow.notification.repository.NotificationRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
+import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -24,7 +28,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 )
 @DirtiesContext
 @ActiveProfiles("test")
+@Testcontainers
 class NotificationListenerTest {
+
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
 
     @Autowired
     private KafkaTemplate<String, OrderEvent> kafkaTemplate;
@@ -40,7 +49,7 @@ class NotificationListenerTest {
         );
 
         kafkaTemplate.send("order-events", event);
-        TimeUnit.SECONDS.sleep(2); // wait for listener
+        TimeUnit.SECONDS.sleep(2);
 
         var notifications = notificationRepository.findByUserIdOrderByCreatedAtDesc(1L);
         assertThat(notifications).isNotEmpty();

@@ -5,6 +5,7 @@ import com.shopflow.user.dto.LoginRequest;
 import com.shopflow.user.dto.RegisterRequest;
 import com.shopflow.user.dto.UserResponse;
 import com.shopflow.user.entity.User;
+import com.shopflow.user.mapper.UserMapper;
 import com.shopflow.user.repository.UserRepository;
 import com.shopflow.user.security.JwtUtil;
 import jakarta.persistence.EntityNotFoundException;
@@ -20,13 +21,16 @@ public class UserService implements UserDetailsService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
+    private final UserMapper userMapper;
 
     public UserService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
-                       JwtUtil jwtUtil) {
+                       JwtUtil jwtUtil,
+                       UserMapper userMapper) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtUtil = jwtUtil;
+        this.userMapper = userMapper;
     }
 
     public AuthResponse register(RegisterRequest request) {
@@ -56,7 +60,7 @@ public class UserService implements UserDetailsService {
     public UserResponse getUserById(Long id) {
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("User not found: " + id));
-        return toResponse(user);
+        return userMapper.toResponse(user);
     }
 
     @Override
@@ -68,10 +72,5 @@ public class UserService implements UserDetailsService {
                         .roles(u.getRole().name())
                         .build())
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + username));
-    }
-
-    private UserResponse toResponse(User u) {
-        return new UserResponse(u.getId(), u.getUsername(), u.getEmail(),
-                u.getRole().name(), u.getCreatedAt());
     }
 }

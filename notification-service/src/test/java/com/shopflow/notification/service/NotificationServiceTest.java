@@ -3,6 +3,7 @@ package com.shopflow.notification.service;
 import com.shopflow.notification.dto.NotificationResponse;
 import com.shopflow.notification.dto.OrderEvent;
 import com.shopflow.notification.entity.Notification;
+import com.shopflow.notification.mapper.NotificationMapper;
 import com.shopflow.notification.repository.NotificationRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -16,6 +17,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -23,6 +25,9 @@ class NotificationServiceTest {
 
     @Mock
     private NotificationRepository notificationRepository;
+
+    @Mock
+    private NotificationMapper notificationMapper;
 
     @InjectMocks
     private NotificationService notificationService;
@@ -76,6 +81,10 @@ class NotificationServiceTest {
 
         when(notificationRepository.findByUserIdOrderByCreatedAtDesc(1L))
                 .thenReturn(List.of(n));
+        when(notificationMapper.toResponse(any(Notification.class)))
+                .thenReturn(new NotificationResponse(1L, 1L, 3L,
+                        "Order #3 confirmed: 1 x 'MacBook Pro' — Total: $2499.99 [PLACED]",
+                        LocalDateTime.now()));
 
         List<NotificationResponse> result = notificationService.getByUserId(1L);
 

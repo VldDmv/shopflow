@@ -3,6 +3,7 @@ package com.shopflow.notification.service;
 import com.shopflow.notification.dto.NotificationResponse;
 import com.shopflow.notification.dto.OrderEvent;
 import com.shopflow.notification.entity.Notification;
+import com.shopflow.notification.mapper.NotificationMapper;
 import com.shopflow.notification.repository.NotificationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -17,9 +18,12 @@ public class NotificationService {
     private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
     private final NotificationRepository notificationRepository;
+    private final NotificationMapper notificationMapper;
 
-    public NotificationService(NotificationRepository notificationRepository) {
+    public NotificationService(NotificationRepository notificationRepository,
+                               NotificationMapper notificationMapper) {
         this.notificationRepository = notificationRepository;
+        this.notificationMapper = notificationMapper;
     }
 
     public void processOrderEvent(OrderEvent event) {
@@ -41,8 +45,7 @@ public class NotificationService {
 
     public List<NotificationResponse> getByUserId(Long userId) {
         return notificationRepository.findByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(n -> new NotificationResponse(
-                        n.getId(), n.getUserId(), n.getOrderId(), n.getMessage(), n.getCreatedAt()))
+                .map(notificationMapper::toResponse)
                 .toList();
     }
 }

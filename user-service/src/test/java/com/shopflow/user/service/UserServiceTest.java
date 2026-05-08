@@ -4,6 +4,7 @@ import com.shopflow.user.dto.AuthResponse;
 import com.shopflow.user.dto.LoginRequest;
 import com.shopflow.user.dto.RegisterRequest;
 import com.shopflow.user.entity.User;
+import com.shopflow.user.mapper.UserMapper;
 import com.shopflow.user.repository.UserRepository;
 import com.shopflow.user.security.JwtUtil;
 import jakarta.persistence.EntityNotFoundException;
@@ -29,6 +30,8 @@ class UserServiceTest {
     private PasswordEncoder passwordEncoder;
     @Mock
     private JwtUtil jwtUtil;
+    @Mock
+    private UserMapper userMapper;
     @InjectMocks
     private UserService userService;
 
