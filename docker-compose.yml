@@ -98,6 +98,7 @@ services:
       SPRING_DATASOURCE_USERNAME: shopflow
       SPRING_DATASOURCE_PASSWORD: shopflow
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      JWT_SECRET: ${JWT_SECRET}
 
   order-service:
     build: ./order-service
@@ -149,6 +150,7 @@ services:
       - eureka-server
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      JWT_SECRET: ${JWT_SECRET}
 
   prometheus:
     image: prom/prometheus:v2.50.1
