@@ -82,11 +82,12 @@ services:
     ports:
       - "8761:8761"
 
+  # Internal services publish no host ports: the api-gateway is the only
+  # entry point, so its JWT filter (and the X-User-* headers it sets)
+  # cannot be bypassed by calling a service directly.
   user-service:
     build: ./user-service
     container_name: shopflow-user-service
-    ports:
-      - "8081:8081"
     restart: on-failure
     depends_on:
       postgres-users:
@@ -98,13 +99,11 @@ services:
       SPRING_DATASOURCE_USERNAME: shopflow
       SPRING_DATASOURCE_PASSWORD: shopflow
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
 
   order-service:
     build: ./order-service
     container_name: shopflow-order-service
-    ports:
-      - "8082:8082"
     restart: on-failure
     depends_on:
       postgres-orders:
@@ -123,8 +122,6 @@ services:
   notification-service:
     build: ./notification-service
     container_name: shopflow-notification-service
-    ports:
-      - "8083:8083"
     restart: on-failure
     depends_on:
       postgres-notifications:
@@ -150,7 +147,7 @@ services:
       - eureka-server
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      JWT_SECRET: ${JWT_SECRET}
+      JWT_SECRET: ${JWT_SECRET:-404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
 
   prometheus:
     image: prom/prometheus:v2.50.1

@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/VldDmv/shopflow/actions/workflows/ci.yml/badge.svg)](https://github.com/VldDmv/shopflow/actions/workflows/ci.yml)
 
-Java 17 · Spring Boot 3.2 · Spring Cloud · Apache Kafka · PostgreSQL · Liquibase · Docker · Prometheus · Grafana
+Java 21 · Spring Boot 3.2 · Spring Cloud · Apache Kafka · PostgreSQL · Liquibase · Docker · Prometheus · Grafana
 
 A reference event-driven microservices platform demonstrating production-grade patterns end to end: service discovery, API gateway, JWT auth, distributed transactions over Kafka, declarative inter-service HTTP with Feign + Resilience4j circuit breaker, schema migrations via Liquibase, and full observability with Actuator + Prometheus + Grafana.
 
@@ -52,12 +52,12 @@ Observability:  Prometheus (9090) ── scrape ──► Actuator on every serv
 ## Tech Stack
 
 ### Core
-- **Spring Boot 3.2**, Java 17 (Lombok)
+- **Spring Boot 3.2**, Java 21 (Lombok)
 - **Spring Cloud Gateway** — reactive API gateway with global JWT filter
 - **Spring Cloud Netflix Eureka** — service registry & client-side load balancing
 - **Spring Cloud OpenFeign** — declarative HTTP client between order-service and user-service
 - **Resilience4j** — circuit breaker, retry, and time-limiter on Feign calls
-- **Apache Kafka** — async `order-events` topic (order-service → notification-service)
+- **Apache Kafka** — async `order-events` topic (order-service → notification-service), transactional outbox on the producer side, idempotent consumer + dead-letter topic on the consumer side
 - **Spring Security** — stateless JWT auth in user-service, BCrypt hashing
 - **Spring Data JPA + Hibernate**
 
@@ -95,13 +95,21 @@ docker-compose up --build
 
 | What                  | URL                                              |
 |-----------------------|--------------------------------------------------|
+| API Gateway           | http://localhost:8080                            |
 | Eureka dashboard      | http://localhost:8761                            |
-| User Swagger UI       | http://localhost:8081/swagger-ui.html            |
-| Order Swagger UI      | http://localhost:8082/swagger-ui.html            |
-| Notification Swagger  | http://localhost:8083/swagger-ui.html            |
 | Prometheus            | http://localhost:9090                            |
 | Grafana (admin/admin) | http://localhost:3000                            |
-| Actuator (any svc)    | http://localhost:808[1–3]/actuator               |
+
+The business services (user, order, notification) publish no host ports — the
+gateway is the only entry point, so its JWT filter cannot be bypassed by
+calling a service directly. To poke at a service's Swagger UI or Actuator
+from the host, run it from inside the Docker network, e.g.:
+
+```bash
+docker compose exec order-service wget -qO- http://localhost:8082/actuator/health
+```
+
+(or temporarily add a `ports:` mapping to that service in `docker-compose.yml`).
 
 ## API Flow
 
@@ -116,11 +124,12 @@ TOKEN=$(curl -s -X POST http://localhost:8080/api/users/login \
   -H "Content-Type: application/json" \
   -d '{"username":"john","password":"secret123"}' | jq -r .token)
 
-# Place order — order-service verifies user via Feign before persisting
+# Place order — the user is taken from the JWT (gateway forwards X-User-Id);
+# order-service verifies the user via Feign before persisting
 curl -X POST http://localhost:8080/api/orders \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  -d '{"userId":1,"productName":"MacBook Pro","quantity":1,"totalPrice":2499.99}'
+  -d '{"productName":"MacBook Pro","quantity":1,"totalPrice":2499.99}'
 
 # Notification was produced via Kafka and consumed asynchronously
 curl http://localhost:8080/api/notifications/user/1 \
@@ -139,7 +148,25 @@ docker-compose stop user-service
 
 Watch circuit state in real time:
 - Grafana → "ShopFlow Overview" → "Circuit Breaker State" panel
-- Or: `curl http://localhost:8082/actuator/circuitbreakers`
+- Or: `docker compose exec order-service wget -qO- http://localhost:8082/actuator/circuitbreakers`
+
+## Event Delivery Semantics
+
+**Transactional outbox (order-service).** `POST /api/orders` writes the order
+and an `ORDER_PLACED` event into the `outbox_events` table in one database
+transaction; a scheduled relay (`OutboxPublisher`, every 2s) publishes staged
+events to Kafka and marks them published. If Kafka is down, events accumulate
+in the outbox and are delivered when it recovers — an order can never exist
+without its event.
+
+Try it: `docker-compose stop kafka`, place a few orders (they succeed), then
+`docker-compose start kafka` — the notifications arrive within seconds.
+
+**Idempotent consumer + DLT (notification-service).** Kafka delivers
+at-least-once, so redelivered events are deduplicated by a unique constraint
+on `order_id`. A message that keeps failing (e.g. a malformed payload) is
+retried 3 times and then parked on the `order-events.DLT` dead-letter topic
+instead of blocking the partition.
 
 ## Database Migrations
 
@@ -167,11 +194,18 @@ cd notification-service && mvn verify # Testcontainers Postgres + EmbeddedKafka
 
 ## JWT Secret
 
-The default secret in `application.yml` is for development only.
-Replace in production with a strong 256-bit Base64-encoded key:
+The signing key is supplied via the `JWT_SECRET` environment variable —
+`application.yml` contains no secret and the services fail fast without it.
+`docker-compose.yml` ships a **dev-only** default (it lives in git history,
+so treat it as public); override it for anything beyond local demos:
+
 ```bash
-openssl rand -base64 32
+export JWT_SECRET=$(openssl rand -base64 32)  # strong 256-bit Base64-encoded key
+docker-compose up --build
 ```
+
+For a bare `mvn spring-boot:run` of user-service or api-gateway, export
+`JWT_SECRET` first.
 
 ## Project Layout
 

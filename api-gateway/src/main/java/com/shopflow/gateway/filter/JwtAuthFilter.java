@@ -36,6 +36,16 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         String path = exchange.getRequest().getURI().getPath();
 
+        // X-User-* headers are an internal contract between the gateway and
+        // downstream services — never trust values supplied by the client
+        exchange = exchange.mutate()
+                .request(r -> r.headers(h -> {
+                    h.remove("X-User-Id");
+                    h.remove("X-User-Name");
+                    h.remove("X-User-Role");
+                }))
+                .build();
+
         if (OPEN_PATHS.stream().anyMatch(path::startsWith)) {
             return chain.filter(exchange);
         }
@@ -59,6 +69,7 @@ public class JwtAuthFilter implements GlobalFilter, Ordered {
             // Forward user info downstream via headers
             ServerWebExchange mutatedExchange = exchange.mutate()
                     .request(r -> r.headers(h -> {
+                        h.set("X-User-Id", String.valueOf(claims.get("userId")));
                         h.set("X-User-Name", claims.getSubject());
                         h.set("X-User-Role", (String) claims.get("role"));
                     }))

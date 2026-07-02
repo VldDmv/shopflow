@@ -4,7 +4,10 @@ import com.shopflow.order.dto.OrderEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
+
+import java.util.concurrent.CompletableFuture;
 
 @Service
 public class OrderEventProducer {
@@ -18,8 +21,8 @@ public class OrderEventProducer {
         this.kafkaTemplate = kafkaTemplate;
     }
 
-    public void publish(OrderEvent event) {
-        kafkaTemplate.send(TOPIC, String.valueOf(event.orderId()), event)
+    public CompletableFuture<SendResult<String, OrderEvent>> publish(OrderEvent event) {
+        return kafkaTemplate.send(TOPIC, String.valueOf(event.orderId()), event)
                 .whenComplete((result, ex) -> {
                     if (ex != null) {
                         log.error("Failed to publish event for orderId={}: {}", event.orderId(), ex.getMessage());

@@ -7,6 +7,7 @@ import com.shopflow.notification.mapper.NotificationMapper;
 import com.shopflow.notification.repository.NotificationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -27,6 +28,12 @@ public class NotificationService {
     }
 
     public void processOrderEvent(OrderEvent event) {
+        // Kafka delivers at-least-once — skip events already processed
+        if (notificationRepository.existsByOrderId(event.orderId())) {
+            log.info("Duplicate order event skipped: orderId={}", event.orderId());
+            return;
+        }
+
         String message = String.format(
                 Locale.US,
                 "Order #%d confirmed: %d x '%s' — Total: $%.2f [%s]",
@@ -38,7 +45,13 @@ public class NotificationService {
         notification.setUserId(event.userId());
         notification.setOrderId(event.orderId());
         notification.setMessage(message);
-        notificationRepository.save(notification);
+        try {
+            notificationRepository.save(notification);
+        } catch (DataIntegrityViolationException e) {
+            // unique constraint on order_id closes the check-then-save race
+            log.info("Duplicate order event skipped on insert: orderId={}", event.orderId());
+            return;
+        }
 
         log.info("Notification saved for userId={}: {}", event.userId(), message);
     }

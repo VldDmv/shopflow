@@ -11,12 +11,14 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -70,6 +72,33 @@ class NotificationServiceTest {
         assertThat(message).contains("2 x");
         assertThat(message).contains("999.99");
         assertThat(message).contains("PLACED");
+    }
+
+    @Test
+    void processOrderEvent_skipsDuplicate_whenOrderAlreadyProcessed() {
+        OrderEvent event = new OrderEvent(
+                3L, 1L, "MacBook Pro", 1, new BigDecimal("2499.99"),
+                "PLACED", LocalDateTime.now()
+        );
+        when(notificationRepository.existsByOrderId(3L)).thenReturn(true);
+
+        notificationService.processOrderEvent(event);
+
+        verify(notificationRepository, never()).save(any());
+    }
+
+    @Test
+    void processOrderEvent_skipsDuplicate_whenInsertHitsUniqueConstraint() {
+        OrderEvent event = new OrderEvent(
+                3L, 1L, "MacBook Pro", 1, new BigDecimal("2499.99"),
+                "PLACED", LocalDateTime.now()
+        );
+        when(notificationRepository.existsByOrderId(3L)).thenReturn(false);
+        when(notificationRepository.save(any()))
+                .thenThrow(new DataIntegrityViolationException("uq_notifications_order_id"));
+
+        assertThatCode(() -> notificationService.processOrderEvent(event))
+                .doesNotThrowAnyException();
     }
 
     @Test

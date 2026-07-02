@@ -26,8 +26,10 @@ eureka:
   instance:
     prefer-ip-address: true
 
+# Signing key comes from the JWT_SECRET environment variable
+# (docker-compose supplies a dev-only default); startup fails fast without it
 jwt:
-  secret: ${JWT_SECRET:dev-only-fallback-replace-me-0000000000000000000000000000}
+  secret: ${JWT_SECRET}
   expiration: 86400000
 
 springdoc:
