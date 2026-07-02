@@ -14,6 +14,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -61,14 +63,14 @@ class OrderServiceTest {
     @Test
     void createOrder_savesOrderAndPublishesEvent() {
         CreateOrderRequest request = new CreateOrderRequest(
-                1L, "MacBook Pro", 1, new BigDecimal("2499.99"));
+                "MacBook Pro", 1, new BigDecimal("2499.99"));
         Order saved = buildOrder(1L);
         when(userClient.userExists(1L)).thenReturn(true);
         when(orderRepository.save(any())).thenReturn(saved);
         when(orderMapper.toEvent(saved)).thenReturn(mock(OrderEvent.class));
         when(orderMapper.toResponse(saved)).thenReturn(stubResponse(1L));
 
-        OrderResponse response = orderService.createOrder(request);
+        OrderResponse response = orderService.createOrder(1L, request);
 
         verify(orderRepository).save(any(Order.class));
         verify(eventProducer).publish(any(OrderEvent.class));
@@ -79,10 +81,10 @@ class OrderServiceTest {
     @Test
     void createOrder_throws_whenUserNotFound() {
         CreateOrderRequest request = new CreateOrderRequest(
-                42L, "MacBook Pro", 1, new BigDecimal("2499.99"));
+                "MacBook Pro", 1, new BigDecimal("2499.99"));
         when(userClient.userExists(42L)).thenReturn(false);
 
-        assertThatThrownBy(() -> orderService.createOrder(request))
+        assertThatThrownBy(() -> orderService.createOrder(42L, request))
                 .isInstanceOf(EntityNotFoundException.class)
                 .hasMessageContaining("42");
 
@@ -93,7 +95,7 @@ class OrderServiceTest {
     @Test
     void createOrder_savesOrder_whenKafkaUnavailable() {
         CreateOrderRequest request = new CreateOrderRequest(
-                1L, "MacBook Pro", 1, new BigDecimal("2499.99"));
+                "MacBook Pro", 1, new BigDecimal("2499.99"));
         Order saved = buildOrder(1L);
         when(userClient.userExists(1L)).thenReturn(true);
         when(orderRepository.save(any())).thenReturn(saved);
@@ -102,7 +104,7 @@ class OrderServiceTest {
         doThrow(new RuntimeException("Kafka unavailable"))
                 .when(eventProducer).publish(any());
 
-        assertThatCode(() -> orderService.createOrder(request))
+        assertThatCode(() -> orderService.createOrder(1L, request))
                 .doesNotThrowAnyException();
 
         verify(orderRepository).save(any());
@@ -114,7 +116,7 @@ class OrderServiceTest {
         when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
         when(orderMapper.toResponse(order)).thenReturn(stubResponse(1L));
 
-        OrderResponse response = orderService.getOrderById(1L);
+        OrderResponse response = orderService.getOrderById(1L, 1L);
 
         assertThat(response.id()).isEqualTo(1L);
         assertThat(response.productName()).isEqualTo("MacBook Pro");
@@ -124,9 +126,22 @@ class OrderServiceTest {
     void getOrderById_throwsException_whenNotFound() {
         when(orderRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> orderService.getOrderById(99L))
+        assertThatThrownBy(() -> orderService.getOrderById(99L, 1L))
                 .isInstanceOf(EntityNotFoundException.class)
                 .hasMessageContaining("99");
+    }
+
+    @Test
+    void getOrderById_forbidden_whenOrderBelongsToAnotherUser() {
+        Order order = buildOrder(1L); // owned by userId=1
+        when(orderRepository.findById(1L)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> orderService.getOrderById(1L, 2L))
+                .isInstanceOf(ResponseStatusException.class)
+                .satisfies(ex -> assertThat(((ResponseStatusException) ex).getStatusCode())
+                        .isEqualTo(HttpStatus.FORBIDDEN));
+
+        verify(orderMapper, never()).toResponse(any(Order.class));
     }
 
     @Test

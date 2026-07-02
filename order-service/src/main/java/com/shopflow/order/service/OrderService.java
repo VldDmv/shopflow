@@ -10,8 +10,10 @@ import com.shopflow.order.repository.OrderRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -36,13 +38,13 @@ public class OrderService {
     }
 
     @Transactional
-    public OrderResponse createOrder(CreateOrderRequest request) {
-        if (!userClient.userExists(request.userId())) {
-            throw new EntityNotFoundException("User not found: " + request.userId());
+    public OrderResponse createOrder(Long userId, CreateOrderRequest request) {
+        if (!userClient.userExists(userId)) {
+            throw new EntityNotFoundException("User not found: " + userId);
         }
 
         Order order = new Order();
-        order.setUserId(request.userId());
+        order.setUserId(userId);
         order.setProductName(request.productName());
         order.setQuantity(request.quantity());
         order.setTotalPrice(request.totalPrice());
@@ -57,10 +59,13 @@ public class OrderService {
         return orderMapper.toResponse(saved);
     }
 
-    public OrderResponse getOrderById(Long id) {
-        return orderRepository.findById(id)
-                .map(orderMapper::toResponse)
+    public OrderResponse getOrderById(Long id, Long requesterId) {
+        Order order = orderRepository.findById(id)
                 .orElseThrow(() -> new EntityNotFoundException("Order not found: " + id));
+        if (!order.getUserId().equals(requesterId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Order belongs to another user");
+        }
+        return orderMapper.toResponse(order);
     }
 
     public List<OrderResponse> getOrdersByUserId(Long userId) {

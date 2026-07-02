@@ -66,8 +66,8 @@ class OrderEventProducerTest {
         ).createConsumer();
         embeddedKafkaBroker.consumeFromAnEmbeddedTopic(consumer, OrderEventProducer.TOPIC);
 
-        CreateOrderRequest request = new CreateOrderRequest(1L, "MacBook Pro", 1, new BigDecimal("2499.99"));
-        OrderResponse response = orderService.createOrder(request);
+        CreateOrderRequest request = new CreateOrderRequest("MacBook Pro", 1, new BigDecimal("2499.99"));
+        OrderResponse response = orderService.createOrder(1L, request);
 
         assertThat(response.id()).isNotNull();
         assertThat(response.status()).isEqualTo("PLACED");
