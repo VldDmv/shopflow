@@ -1,0 +1,15 @@
+databaseChangeLog:
+  - changeSet:
+      id: 002-notifications-order-id-unique
+      author: shopflow
+      comment: >
+        Kafka delivers at-least-once; a unique constraint on order_id makes
+        redelivered order events idempotent instead of creating duplicates.
+      changes:
+        - dropIndex:
+            indexName: idx_notifications_order_id
+            tableName: notifications
+        - addUniqueConstraint:
+            tableName: notifications
+            columnNames: order_id
+            constraintName: uq_notifications_order_id

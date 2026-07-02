@@ -57,7 +57,7 @@ Observability:  Prometheus (9090) ── scrape ──► Actuator on every serv
 - **Spring Cloud Netflix Eureka** — service registry & client-side load balancing
 - **Spring Cloud OpenFeign** — declarative HTTP client between order-service and user-service
 - **Resilience4j** — circuit breaker, retry, and time-limiter on Feign calls
-- **Apache Kafka** — async `order-events` topic (order-service → notification-service)
+- **Apache Kafka** — async `order-events` topic (order-service → notification-service), transactional outbox on the producer side, idempotent consumer + dead-letter topic on the consumer side
 - **Spring Security** — stateless JWT auth in user-service, BCrypt hashing
 - **Spring Data JPA + Hibernate**
 
@@ -149,6 +149,24 @@ docker-compose stop user-service
 Watch circuit state in real time:
 - Grafana → "ShopFlow Overview" → "Circuit Breaker State" panel
 - Or: `docker compose exec order-service wget -qO- http://localhost:8082/actuator/circuitbreakers`
+
+## Event Delivery Semantics
+
+**Transactional outbox (order-service).** `POST /api/orders` writes the order
+and an `ORDER_PLACED` event into the `outbox_events` table in one database
+transaction; a scheduled relay (`OutboxPublisher`, every 2s) publishes staged
+events to Kafka and marks them published. If Kafka is down, events accumulate
+in the outbox and are delivered when it recovers — an order can never exist
+without its event.
+
+Try it: `docker-compose stop kafka`, place a few orders (they succeed), then
+`docker-compose start kafka` — the notifications arrive within seconds.
+
+**Idempotent consumer + DLT (notification-service).** Kafka delivers
+at-least-once, so redelivered events are deduplicated by a unique constraint
+on `order_id`. A message that keeps failing (e.g. a malformed payload) is
+retried 3 times and then parked on the `order-events.DLT` dead-letter topic
+instead of blocking the partition.
 
 ## Database Migrations
 
