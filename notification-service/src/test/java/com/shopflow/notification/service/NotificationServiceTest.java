@@ -19,6 +19,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -93,12 +94,32 @@ class NotificationServiceTest {
                 3L, 1L, "MacBook Pro", 1, new BigDecimal("2499.99"),
                 "PLACED", LocalDateTime.now()
         );
-        when(notificationRepository.existsByOrderId(3L)).thenReturn(false);
+        // The race: the up-front check finds nothing, a concurrent consumer
+        // inserts the row, our insert then loses to the unique constraint —
+        // so by the time we look again the row IS there.
+        when(notificationRepository.existsByOrderId(3L)).thenReturn(false, true);
         when(notificationRepository.save(any()))
                 .thenThrow(new DataIntegrityViolationException("uq_notifications_order_id"));
 
         assertThatCode(() -> notificationService.processOrderEvent(event))
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void processOrderEvent_rethrows_whenIntegrityBreachIsNotADuplicate() {
+        OrderEvent event = new OrderEvent(
+                3L, 1L, "MacBook Pro", 1, new BigDecimal("2499.99"),
+                "PLACED", LocalDateTime.now()
+        );
+        // No row exists either before or after, so the insert failed for some
+        // other reason (NOT NULL, value too long). Swallowing that would drop
+        // the event silently; it has to reach the dead-letter topic instead.
+        when(notificationRepository.existsByOrderId(3L)).thenReturn(false, false);
+        when(notificationRepository.save(any()))
+                .thenThrow(new DataIntegrityViolationException("null value in column \"user_id\""));
+
+        assertThatThrownBy(() -> notificationService.processOrderEvent(event))
+                .isInstanceOf(DataIntegrityViolationException.class);
     }
 
     @Test

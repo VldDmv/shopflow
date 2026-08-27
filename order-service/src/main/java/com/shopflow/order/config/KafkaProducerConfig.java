@@ -26,7 +26,12 @@ public class KafkaProducerConfig {
                 ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class,
                 ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, JsonSerializer.class,
                 ProducerConfig.ACKS_CONFIG, "all",
-                ProducerConfig.RETRIES_CONFIG, 3
+                ProducerConfig.RETRIES_CONFIG, 3,
+                // Without this, send() blocks for the default 60s waiting for
+                // cluster metadata when the broker is down, pinning the outbox
+                // scheduler thread and making OutboxPublisher's own 10s future
+                // timeout unreachable. Fail fast and let the next tick retry.
+                ProducerConfig.MAX_BLOCK_MS_CONFIG, 5000
         ));
     }
 

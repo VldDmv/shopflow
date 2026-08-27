@@ -48,7 +48,15 @@ public class NotificationService {
         try {
             notificationRepository.save(notification);
         } catch (DataIntegrityViolationException e) {
-            // unique constraint on order_id closes the check-then-save race
+            // uq_notifications_order_id closes the check-then-save race, and a
+            // row that is now present proves that is what happened. Any other
+            // integrity breach (a NOT NULL column, a message over length 500)
+            // is a genuine failure: rethrow so the error handler retries it and
+            // ultimately parks it in the dead-letter topic instead of dropping
+            // it silently.
+            if (!notificationRepository.existsByOrderId(event.orderId())) {
+                throw e;
+            }
             log.info("Duplicate order event skipped on insert: orderId={}", event.orderId());
             return;
         }

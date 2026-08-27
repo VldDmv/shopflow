@@ -22,6 +22,13 @@ spring:
     bootstrap-servers: localhost:29092
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
+  cloud:
+    openfeign:
+      client:
+        config:
+          user-service:
+            connect-timeout: 2000
+            read-timeout: 2000
 
 eureka:
   client:
@@ -54,6 +61,12 @@ resilience4j:
       userClient:
         sliding-window-type: COUNT_BASED
         sliding-window-size: 10
+        # Must be set explicitly: the default is 100, and the Spring binder
+        # sets slidingWindowSize and minimumNumberOfCalls independently
+        # without the min() clamp that CircuitBreakerConfig.slidingWindow()
+        # applies. Left unset, a 10-call window can never reach 100 buffered
+        # calls, so the failure rate stays -1 and the breaker never opens.
+        minimum-number-of-calls: 5
         failure-rate-threshold: 50
         wait-duration-in-open-state: 10s
         permitted-number-of-calls-in-half-open-state: 3
@@ -66,10 +79,9 @@ resilience4j:
         retry-exceptions:
           - feign.RetryableException
           - java.io.IOException
-  timelimiter:
-    instances:
-      userClient:
-        timeout-duration: 2s
+  # No timelimiter instance here on purpose: @TimeLimiter only wraps methods
+  # returning CompletableFuture, and UserClient.userExists returns boolean.
+  # The call is bounded by the Feign timeouts above instead.
 
 logging:
   level:
