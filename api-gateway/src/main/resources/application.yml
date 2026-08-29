@@ -33,6 +33,27 @@ eureka:
   instance:
     prefer-ip-address: true
 
+# Actuator lives on its own port, unpublished to the host, so Prometheus can
+# scrape it from inside the docker network and nothing else can.
+#
+# JwtAuthFilter would NOT have protected it on 8080: a GlobalFilter only runs
+# for requests RoutePredicateHandlerMapping matches to a route, and actuator's
+# own handler mapping has higher precedence. Endpoints served there would have
+# been world-readable on the public entry point, with no token required.
+management:
+  server:
+    port: 8090
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
 # Signing key comes from the JWT_SECRET environment variable
 # (docker-compose supplies a dev-only default); startup fails fast without it
 jwt:

@@ -3,6 +3,14 @@ global:
   evaluation_interval: 15s
 
 scrape_configs:
+  # The gateway is the only public entry point, so its counters are the only
+  # place total client traffic and rejected requests are visible. Port 8090 is
+  # its management server, reachable only inside the compose network.
+  - job_name: 'api-gateway'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['api-gateway:8090']
+
   - job_name: 'user-service'
     metrics_path: '/actuator/prometheus'
     static_configs:
