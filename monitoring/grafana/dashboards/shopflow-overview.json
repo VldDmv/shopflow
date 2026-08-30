@@ -8,7 +8,7 @@
   "panels": [
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
-      "fieldConfig": {"defaults": {"unit": "percent"}, "overrides": []},
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}, "overrides": []},
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
       "id": 1,
       "options": {
@@ -17,7 +17,7 @@
       },
       "targets": [
         {
-          "expr": "100 * (jvm_memory_used_bytes / jvm_memory_max_bytes)",
+          "expr": "100 * sum by (application, area) (jvm_memory_used_bytes) / sum by (application, area) (jvm_memory_max_bytes > 0)",
           "legendFormat": "{{application}} - {{area}}",
           "refId": "A"
         }
@@ -41,6 +41,7 @@
     },
     {
       "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
       "id": 3,
       "targets": [
