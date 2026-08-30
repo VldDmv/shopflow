@@ -45,6 +45,12 @@ management:
   metrics:
     tags:
       application: ${spring.application.name}
+    distribution:
+      # Publishes the _bucket series histogram_quantile() needs; without it
+      # the timer only exposes _count/_sum/_max and every percentile query
+      # comes back empty.
+      percentiles-histogram:
+        http.server.requests: true
 
 logging:
   level:
